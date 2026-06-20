@@ -1,4 +1,3 @@
-````markdown
 # Method Architect
 
 ## Project Charter
@@ -615,4 +614,3 @@ Method Architect is currently an early-stage research and engineering project.
 Schemas, interfaces, outputs, and methodological claims are expected to evolve as the system is evaluated against real scientific papers.
 
 Contributions, critiques, domain expertise, and benchmark suggestions are welcome.
-````

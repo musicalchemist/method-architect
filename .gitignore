@@ -34,3 +34,6 @@ papers/
 outputs/
 runs/
 *.pdf
+
+# Helper-local generated lockfile
+helpers/method_extractor/uv.lock

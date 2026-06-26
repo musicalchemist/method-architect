@@ -12,6 +12,21 @@ From this folder:
 ../../.venv/bin/python -m method_extractor extract path/to/paper.pdf --domain biomedical_ai
 ```
 
+Or use `uv` from this folder:
+
+```bash
+uv run method-extractor extract papers/paper.pdf --domain ai_ml --llm
+```
+
+Local papers and generated runs belong here:
+
+```text
+papers/
+runs/
+```
+
+Both directories are ignored by Git, so local PDFs and extraction outputs are not pushed to GitHub.
+
 To ask OpenAI to draft-fill the schema from the extracted source text:
 
 ```bash

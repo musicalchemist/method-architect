@@ -15,8 +15,10 @@ From this folder:
 Or use `uv` from this folder:
 
 ```bash
-uv run method-extractor extract papers/paper.pdf --domain ai_ml --llm
+uv run python -m method_extractor extract papers/paper.pdf --domain ai_ml --llm
 ```
+
+This form runs the helper without installing the console script into the environment first.
 
 Local papers and generated runs belong here:
 

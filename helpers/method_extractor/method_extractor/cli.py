@@ -13,8 +13,10 @@ from .llm import (
     LLMExtractionError,
     apply_llm_extraction,
     extract_blueprint_fields_with_openai,
+    summarize_blueprint_with_openai,
 )
-from .run_index import append_run_index, search_run_index
+from .method_summary import attach_summary_metadata, compact_blueprint_for_summary, render_method_summary
+from .run_index import append_method_summary_index, append_run_index, search_run_index
 from .schema import DOMAIN_PROFILES, audit_blueprint, field_specs_as_dict, make_blueprint, validate_blueprint
 from .sources import load_source, sectionize_text, write_source_artifacts
 from .render import render_annotation_worksheet, render_report
@@ -41,6 +43,8 @@ def build_parser() -> argparse.ArgumentParser:
     extract.add_argument("--title", default=None, help="Optional human-readable title hint.")
     extract.add_argument("--llm", action="store_true", help="Use OpenAI to draft-fill blueprint.json.")
     extract.add_argument("--model", default=DEFAULT_MODEL, help="OpenAI model for --llm.")
+    extract.add_argument("--summarize", action="store_true", help="After LLM extraction, create method_summary.json and method_summary.md.")
+    extract.add_argument("--summary-model", default=None, help="OpenAI model for --summarize. Defaults to --model.")
     extract.add_argument("--api-key-env", default=DEFAULT_API_KEY_ENV, help="Environment variable containing the OpenAI API key.")
     extract.add_argument("--max-chars", type=int, default=60000, help="Maximum source characters to send to the LLM.")
     extract.add_argument(
@@ -65,6 +69,12 @@ def build_parser() -> argparse.ArgumentParser:
     llm_fill.add_argument("--apply", action="store_true", help="Replace blueprint.json/report.md with the LLM draft.")
     llm_fill.set_defaults(func=cmd_llm_fill)
 
+    summarize = subparsers.add_parser("summarize", help="Create a compact Method Summary from an existing blueprint.")
+    summarize.add_argument("path", help="Run directory containing blueprint.json, or a blueprint JSON file.")
+    summarize.add_argument("--model", default=DEFAULT_MODEL, help="OpenAI model to use.")
+    summarize.add_argument("--api-key-env", default=DEFAULT_API_KEY_ENV, help="Environment variable containing the OpenAI API key.")
+    summarize.set_defaults(func=cmd_summarize)
+
     index = subparsers.add_parser("index", help="List indexed extraction runs.")
     index.add_argument("--runs", default="runs", help="Runs directory containing index.jsonl.")
     index.add_argument("--query", default=None, help="Filter by paper ID, title, input, or run name.")
@@ -86,6 +96,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_extract(args: argparse.Namespace) -> int:
+    if args.summarize and not args.llm:
+        raise SystemExit("--summarize requires --llm during extract. Use the standalone summarize command for existing blueprints.")
+
     out_base = Path(args.out)
     title_hint = args.title
     paper_id = args.paper_id
@@ -93,15 +106,18 @@ def cmd_extract(args: argparse.Namespace) -> int:
     run_dir = _new_run_dir(out_base, slug)
     source_dir = run_dir / "source"
 
+    _progress("Loading source")
     document = load_source(args.input, source_dir)
     if not title_hint:
         title_hint = document.title_hint
     if not paper_id:
         paper_id = document.source_id
 
+    _progress("Indexing source text")
     sections = sectionize_text(document.text)
     write_source_artifacts(document, sections, source_dir)
 
+    _progress("Creating blueprint template")
     blueprint = make_blueprint(
         input_ref=args.input,
         domain=args.domain,
@@ -112,6 +128,7 @@ def cmd_extract(args: argparse.Namespace) -> int:
     if args.llm:
         _write_json(run_dir / "blueprint.template.json", blueprint)
         try:
+            _progress("Calling OpenAI for detailed blueprint extraction")
             blueprint = _run_llm_extraction(
                 blueprint=blueprint,
                 run_dir=run_dir,
@@ -140,6 +157,7 @@ def cmd_extract(args: argparse.Namespace) -> int:
 
     audit = audit_blueprint(blueprint)
 
+    _progress("Writing blueprint report")
     _write_json(run_dir / "blueprint.json", blueprint)
     _write_json(run_dir / "audit.json", audit)
     (run_dir / "report.md").write_text(render_report(blueprint, audit, sections), encoding="utf-8")
@@ -156,15 +174,55 @@ def cmd_extract(args: argparse.Namespace) -> int:
         llm_succeeded=bool(args.llm),
     )
 
+    if args.summarize:
+        try:
+            _progress("Calling OpenAI for condensed method summary")
+            summary = _run_method_summary(
+                blueprint=blueprint,
+                run_dir=run_dir,
+                model=args.summary_model or args.model,
+                api_key_env=args.api_key_env,
+            )
+            _progress(f"Wrote method summary: {run_dir / 'method_summary.md'}")
+        except LLMExtractionError as exc:
+            print(f"Method summary failed: {exc}")
+            return 3
+
     print(f"Created Method Blueprint workspace: {run_dir}")
     print(f"Blueprint: {run_dir / 'blueprint.json'}")
     print(f"Report: {run_dir / 'report.md'}")
     if args.llm:
         print(f"LLM draft metadata: {run_dir / 'llm_extraction.json'}")
+    if args.summarize:
+        print(f"Method summary: {run_dir / 'method_summary.md'}")
     if document.warnings:
         print("Warnings:")
         for warning in document.warnings:
             print(f"- {warning}")
+    return 0
+
+
+def cmd_summarize(args: argparse.Namespace) -> int:
+    blueprint_path = _resolve_blueprint_path(Path(args.path))
+    if not blueprint_path.exists():
+        raise SystemExit(f"Missing blueprint: {blueprint_path}")
+    run_dir = blueprint_path.parent
+    blueprint = _read_json(blueprint_path)
+
+    try:
+        _progress("Calling OpenAI for condensed method summary")
+        _run_method_summary(
+            blueprint=blueprint,
+            run_dir=run_dir,
+            model=args.model,
+            api_key_env=args.api_key_env,
+        )
+    except LLMExtractionError as exc:
+        print(f"Method summary failed: {exc}")
+        return 3
+
+    print(f"Method summary: {run_dir / 'method_summary.md'}")
+    print(f"Method summary JSON: {run_dir / 'method_summary.json'}")
     return 0
 
 
@@ -325,6 +383,10 @@ def _read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _progress(message: str) -> None:
+    print(f"[method-extractor] {message}...")
+
+
 def _run_llm_extraction(
     *,
     blueprint: dict[str, Any],
@@ -349,6 +411,27 @@ def _run_llm_extraction(
     _write_json(run_dir / "llm_extraction.json", extraction)
     _write_json(run_dir / "llm_response.json", raw_response)
     return apply_llm_extraction(blueprint, extraction, model=model)
+
+
+def _run_method_summary(
+    *,
+    blueprint: dict[str, Any],
+    run_dir: Path,
+    model: str,
+    api_key_env: str,
+) -> dict[str, Any]:
+    compact = compact_blueprint_for_summary(blueprint)
+    summary, raw_response = summarize_blueprint_with_openai(
+        compact_blueprint=compact,
+        model=model,
+        api_key_env=api_key_env,
+    )
+    summary = attach_summary_metadata(summary, blueprint=blueprint, model=model, source="blueprint")
+    _write_json(run_dir / "method_summary.json", summary)
+    _write_json(run_dir / "method_summary_response.json", raw_response)
+    (run_dir / "method_summary.md").write_text(render_method_summary(summary), encoding="utf-8")
+    append_method_summary_index(runs_dir=run_dir.parent, run_dir=run_dir, summary=summary)
+    return summary
 
 
 def _direct_pdf_path_for_blueprint(blueprint: dict[str, Any], pdf_input: str) -> Path | None:

@@ -37,6 +37,23 @@ To ask OpenAI to draft-fill the schema from the extracted source text:
 
 For local PDFs, `--llm` sends the PDF directly to OpenAI as a file input by default. That lets the model use PDF text and page images when the selected model supports them. To force text-only extraction, add `--pdf-input text`.
 
+To run the full two-pass workflow in one command:
+
+```bash
+uv run python -m method_extractor extract papers/paper.pdf --domain ai_ml --llm --summarize
+```
+
+That performs:
+
+```text
+PDF or source input
+  -> detailed Method Blueprint extraction
+  -> compact Method Summary generated from blueprint.json
+  -> JSON and Markdown outputs
+```
+
+The second pass reads the generated `blueprint.json`, not the PDF, so it is cheaper and easier to inspect than re-reading the whole paper.
+
 The LLM path uses `OPENAI_API_KEY_METHOD_ARCHITECT` by default. You can override the model:
 
 ```bash
@@ -66,10 +83,18 @@ runs/<timestamp>-<paper-slug>/
 
 When `--llm` is used, the run also includes `blueprint.template.json`, `llm_extraction.json`, and `llm_response.json`.
 
+When `--summarize` is used, the run also includes `method_summary.json`, `method_summary.md`, and `method_summary_response.json`.
+
 Each extraction appends a searchable record to:
 
 ```text
 runs/index.jsonl
+```
+
+Each summary appends a compact cross-paper record to:
+
+```text
+runs/method_summaries.jsonl
 ```
 
 `blueprint.json` is the canonical editable record. Important fields use explicit status values:
@@ -99,6 +124,24 @@ To apply the LLM draft to the main blueprint, use:
 ```
 
 LLM output is a draft for human review. The validator still flags missing evidence, invalid statuses, and required fields left as `not_reported`.
+
+## Add Method Summary Later
+
+If you already have a run with a populated `blueprint.json`, summarize it with:
+
+```bash
+uv run python -m method_extractor summarize runs/<run-folder>
+```
+
+This writes:
+
+```text
+method_summary.json
+method_summary.md
+method_summary_response.json
+```
+
+Use the summary when you want a quick view of the paper's general experimental theme, design pattern, reusable method ideas, important limitations, and missing methodological details.
 
 ## Find Previous Runs
 

@@ -71,6 +71,34 @@ def extract_blueprint_fields_with_openai(
     return extraction, response
 
 
+def summarize_blueprint_with_openai(
+    *,
+    compact_blueprint: dict[str, Any],
+    model: str = DEFAULT_MODEL,
+    api_key_env: str = DEFAULT_API_KEY_ENV,
+    timeout_seconds: int = 120,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    api_key = os.environ.get(api_key_env)
+    if not api_key:
+        raise LLMExtractionError(f"Missing OpenAI API key environment variable: {api_key_env}")
+
+    request_body = _build_summary_request(compact_blueprint=compact_blueprint, model=model)
+    response = _post_openai_response(api_key=api_key, body=request_body, timeout_seconds=timeout_seconds)
+    output_text = _extract_output_text(response)
+
+    try:
+        summary = json.loads(output_text)
+    except json.JSONDecodeError as exc:
+        raise LLMExtractionError(f"OpenAI summary response was not valid JSON: {exc}") from exc
+
+    summary["_request_metadata"] = {
+        "model": model,
+        "api_key_env": api_key_env,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    return summary, response
+
+
 def apply_llm_extraction(
     blueprint: dict[str, Any],
     extraction: dict[str, Any],
@@ -214,6 +242,135 @@ def extraction_response_schema(blueprint: dict[str, Any]) -> dict[str, Any]:
                 "items": {"type": "string"},
             },
         },
+    }
+
+
+def method_summary_response_schema() -> dict[str, Any]:
+    reusable_idea_schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["idea", "why_it_matters", "reusable_pattern", "supporting_blueprint_fields"],
+        "properties": {
+            "idea": {"type": "string"},
+            "why_it_matters": {"type": "string"},
+            "reusable_pattern": {"type": "string"},
+            "supporting_blueprint_fields": {"type": "array", "items": {"type": "string"}},
+        },
+    }
+    experiment_schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["name", "purpose", "data", "method", "comparison", "evaluation", "finding_type"],
+        "properties": {
+            "name": {"type": "string"},
+            "purpose": {"type": "string"},
+            "data": {"type": "string"},
+            "method": {"type": "string"},
+            "comparison": {"type": "string"},
+            "evaluation": {"type": "string"},
+            "finding_type": {"type": "string"},
+        },
+    }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "paper",
+            "method_theme",
+            "research_goal",
+            "design_pattern",
+            "design_pattern_tags",
+            "experimental_unit",
+            "data_strategy",
+            "comparison_strategy",
+            "validation_strategy",
+            "evaluation_strategy",
+            "statistical_strategy",
+            "robustness_strategy",
+            "key_methods",
+            "key_metrics",
+            "reusable_method_ideas",
+            "experiments",
+            "important_limitations",
+            "missing_or_unclear",
+            "other_important_details",
+            "confidence_notes",
+            "warnings",
+        ],
+        "properties": {
+            "paper": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["title", "paper_id", "domain"],
+                "properties": {
+                    "title": {"type": "string"},
+                    "paper_id": {"type": "string"},
+                    "domain": {"type": "string"},
+                },
+            },
+            "method_theme": {"type": "string"},
+            "research_goal": {"type": "string"},
+            "design_pattern": {"type": "string"},
+            "design_pattern_tags": {"type": "array", "items": {"type": "string"}},
+            "experimental_unit": {"type": "string"},
+            "data_strategy": {"type": "string"},
+            "comparison_strategy": {"type": "string"},
+            "validation_strategy": {"type": "string"},
+            "evaluation_strategy": {"type": "string"},
+            "statistical_strategy": {"type": "string"},
+            "robustness_strategy": {"type": "string"},
+            "key_methods": {"type": "array", "items": {"type": "string"}},
+            "key_metrics": {"type": "array", "items": {"type": "string"}},
+            "reusable_method_ideas": {"type": "array", "items": reusable_idea_schema},
+            "experiments": {"type": "array", "items": experiment_schema},
+            "important_limitations": {"type": "array", "items": {"type": "string"}},
+            "missing_or_unclear": {"type": "array", "items": {"type": "string"}},
+            "other_important_details": {"type": "array", "items": {"type": "string"}},
+            "confidence_notes": {"type": "string"},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+        },
+    }
+
+
+def _build_summary_request(*, compact_blueprint: dict[str, Any], model: str) -> dict[str, Any]:
+    system_prompt = (
+        "You condense a detailed Method Blueprint into a compact Method Summary for a researcher. "
+        "Use only the blueprint content. Do not invent details. Preserve important missingness and uncertainty. "
+        "Focus on the experimental design pattern, reusable method ideas, validation/evaluation strategy, and major gaps."
+    )
+    user_prompt = {
+        "task": "Create a concise, reusable method summary from this Method Blueprint.",
+        "instructions": [
+            "Make the summary useful for comparing many papers later.",
+            "Prefer general experimental patterns over paper-specific trivia.",
+            "Include important caveats and missing methodology fields.",
+            "If multiple experiments are present, summarize each in experiments[].",
+            "Use short phrases suitable for JSONL/CSV comparison where possible.",
+            "Do not claim evidence beyond what the blueprint contains.",
+        ],
+        "compact_blueprint": compact_blueprint,
+    }
+    return {
+        "model": model,
+        "input": [
+            {
+                "role": "system",
+                "content": [{"type": "input_text", "text": system_prompt}],
+            },
+            {
+                "role": "user",
+                "content": [{"type": "input_text", "text": json.dumps(user_prompt, ensure_ascii=False)}],
+            },
+        ],
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "method_summary",
+                "strict": True,
+                "schema": method_summary_response_schema(),
+            }
+        },
+        "max_output_tokens": 7000,
     }
 
 

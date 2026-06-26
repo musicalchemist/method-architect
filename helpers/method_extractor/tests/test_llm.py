@@ -2,7 +2,12 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from method_extractor.llm import _build_responses_request, apply_llm_extraction, extraction_response_schema
+from method_extractor.llm import (
+    _build_responses_request,
+    apply_llm_extraction,
+    extraction_response_schema,
+    method_summary_response_schema,
+)
 from method_extractor.schema import make_blueprint
 
 
@@ -100,6 +105,14 @@ class LLMExtractionTests(unittest.TestCase):
             self.assertEqual(user_content[1]["type"], "input_file")
             self.assertEqual(user_content[1]["filename"], "paper.pdf")
             self.assertTrue(user_content[1]["file_data"].startswith("data:application/pdf;base64,"))
+
+    def test_method_summary_response_schema_is_strict_object(self):
+        schema = method_summary_response_schema()
+
+        self.assertEqual(schema["type"], "object")
+        self.assertFalse(schema["additionalProperties"])
+        self.assertIn("method_theme", schema["required"])
+        self.assertFalse(schema["properties"]["paper"]["additionalProperties"])
 
 
 if __name__ == "__main__":

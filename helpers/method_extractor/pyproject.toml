@@ -1,0 +1,16 @@
+[project]
+name = "method-extractor-helper"
+version = "0.1.0"
+description = "Manual helper for evidence-grounded method extraction from scientific papers."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+pdf = ["pypdf>=4.0"]
+
+[project.scripts]
+method-extractor = "method_extractor.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

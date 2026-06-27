@@ -54,6 +54,62 @@ PDF or source input
 
 The second pass reads the generated `blueprint.json`, not the PDF, so it is cheaper and easier to inspect than re-reading the whole paper.
 
+## Local Dashboard
+
+You can also run the same two-pass workflow from a local browser dashboard:
+
+```bash
+bin/method-dashboard
+```
+
+From anywhere on this machine, including your home directory, run the launcher by path:
+
+```bash
+~/Desktop/CODE/repos/method-architect/helpers/method_extractor/bin/method-dashboard
+```
+
+The dashboard is served at:
+
+```text
+http://127.0.0.1:8765
+```
+
+The launcher opens that URL automatically. If you only want the terminal URL, run:
+
+```bash
+bin/method-dashboard --no-open-browser
+```
+
+The dashboard lets you provide one of:
+
+- a local PDF, text, Markdown, or HTML file upload
+- a website URL
+- pasted raw text
+
+It always runs the LLM blueprint extraction pass. The method summary checkbox is enabled by default, so a completed run usually creates both:
+
+```text
+blueprint.json
+method_summary.json
+method_summary.md
+```
+
+The LLM provider dropdown currently supports OpenAI only. The dropdown is present so additional providers can be added later without redesigning the workflow.
+
+Uploaded files and pasted text are stored under:
+
+```text
+papers/dashboard_uploads/
+```
+
+Generated outputs are stored under:
+
+```text
+runs/
+```
+
+Both paths are ignored by Git.
+
 The LLM path uses `OPENAI_API_KEY_METHOD_ARCHITECT` by default. You can override the model:
 
 ```bash
@@ -170,6 +226,14 @@ Validation checks schema shape, status values, missing values, evidence gaps, an
 ```bash
 ../../.venv/bin/python -m unittest discover -s tests
 ```
+
+## Helper Roadmap
+
+Planned local-dashboard improvements:
+
+- Add a multi-paper summary browser that reads `runs/method_summaries.jsonl`.
+- Add filters for domain, design pattern tags, metrics, validation strategy, and statistical strategy.
+- Add selected-paper comparison views for reusable method ideas, limitations, and missing methodology fields.
 
 ## PDF Text Extraction
 

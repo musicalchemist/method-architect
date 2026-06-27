@@ -26,6 +26,7 @@ helpers/method_extractor/
 The helper can:
 
 - Create a structured Method Blueprint workspace for a paper.
+- Run a local browser dashboard for one-paper extraction and summary review.
 - Send local PDFs directly to OpenAI for schema-shaped LLM extraction.
 - Extract from text, HTML, URLs, or PDFs.
 - Preserve explicit field statuses such as `reported`, `inferred`, `unclear`, `contradictory`, and `not_reported`.
@@ -41,6 +42,12 @@ From the helper directory:
 ```bash
 cd helpers/method_extractor
 uv run python -m method_extractor extract "papers/example-paper.pdf" --domain ai_ml --llm --summarize
+```
+
+Or start the local dashboard:
+
+```bash
+helpers/method_extractor/bin/method-dashboard
 ```
 
 For biomedical AI papers:

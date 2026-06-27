@@ -92,6 +92,24 @@ def build_parser() -> argparse.ArgumentParser:
     schema.add_argument("--domain", choices=DOMAIN_PROFILES, default="general")
     schema.set_defaults(func=cmd_schema)
 
+    dashboard = subparsers.add_parser("dashboard", help="Run the local method extraction dashboard.")
+    dashboard.add_argument("--host", default="127.0.0.1", help="Host interface for the local dashboard.")
+    dashboard.add_argument("--port", type=int, default=8765, help="Port for the local dashboard.")
+    dashboard.add_argument(
+        "--open-browser",
+        dest="open_browser",
+        action="store_true",
+        default=True,
+        help="Open the dashboard in the default browser. This is the default.",
+    )
+    dashboard.add_argument(
+        "--no-open-browser",
+        dest="open_browser",
+        action="store_false",
+        help="Print the dashboard URL without opening a browser.",
+    )
+    dashboard.set_defaults(func=cmd_dashboard)
+
     return parser
 
 
@@ -344,6 +362,12 @@ def cmd_render(args: argparse.Namespace) -> int:
 def cmd_schema(args: argparse.Namespace) -> int:
     print(json.dumps(field_specs_as_dict(args.domain), indent=2))
     return 0
+
+
+def cmd_dashboard(args: argparse.Namespace) -> int:
+    from .dashboard import run_dashboard
+
+    return run_dashboard(host=args.host, port=args.port, open_browser=args.open_browser)
 
 
 def _new_run_dir(base: Path, slug: str) -> Path:

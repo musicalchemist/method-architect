@@ -1,0 +1,14 @@
+#!/usr/bin/env zsh
+set -euo pipefail
+
+SCRIPT_DIR="${0:A:h}"
+HELPER_DIR="${SCRIPT_DIR:h}"
+
+if ! command -v uv >/dev/null 2>&1; then
+  print -u2 "uv is required to run the Method Extractor dashboard."
+  print -u2 "Install uv or run: cd ${HELPER_DIR} && python -m method_extractor dashboard"
+  exit 1
+fi
+
+cd "${HELPER_DIR}"
+exec uv run python -m method_extractor dashboard "$@"

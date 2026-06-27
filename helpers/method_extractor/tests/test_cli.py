@@ -38,6 +38,17 @@ class CliTests(unittest.TestCase):
             self.assertEqual(blueprint["paper"]["domain_profile"], "comp_bio")
             self.assertTrue((run_dirs[0] / "report.md").exists())
 
+    def test_dashboard_help_includes_browser_flags(self):
+        result = subprocess.run(
+            [sys.executable, "-m", "method_extractor", "dashboard", "--help"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertIn("--open-browser", result.stdout)
+        self.assertIn("--no-open-browser", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

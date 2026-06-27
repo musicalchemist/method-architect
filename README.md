@@ -40,20 +40,16 @@ From the helper directory:
 
 ```bash
 cd helpers/method_extractor
-uv run python -m method_extractor extract "papers/example-paper.pdf" --domain ai_ml --llm
+uv run python -m method_extractor extract "papers/example-paper.pdf" --domain ai_ml --llm --summarize
 ```
 
 For biomedical AI papers:
 
 ```bash
-uv run python -m method_extractor extract "papers/example-paper.pdf" --domain biomedical_ai --llm
+uv run python -m method_extractor extract "papers/example-paper.pdf" --domain biomedical_ai --llm --summarize
 ```
 
-The helper uses the `OPENAI_API_KEY_METHOD_ARCHITECT` environment variable by default:
-
-```bash
-export OPENAI_API_KEY_METHOD_ARCHITECT="your_key_here"
-```
+The helper uses the `OPENAI_API_KEY_METHOD_ARCHITECT` environment variable by default. Keep the actual key in your local shell or secret manager, not in this repository.
 
 Do not commit API keys, papers, run outputs, or `.env` files.
 
@@ -85,12 +81,14 @@ blueprint.json
 audit.json
 report.md
 annotation_worksheet.md
+method_summary.json
+method_summary.md
 llm_extraction.json
 llm_response.json
 source/
 ```
 
-The main file is `blueprint.json`. The easier human-readable review file is `report.md`.
+The canonical detailed file is `blueprint.json`. The easier human-readable detailed review file is `report.md`. The compact learning/comparison view is `method_summary.md`.
 
 List indexed runs:
 

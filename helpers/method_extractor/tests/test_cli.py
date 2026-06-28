@@ -1,4 +1,5 @@
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -48,6 +49,24 @@ class CliTests(unittest.TestCase):
 
         self.assertIn("--open-browser", result.stdout)
         self.assertIn("--no-open-browser", result.stdout)
+        self.assertIn("--no-auto-port", result.stdout)
+
+    def test_dashboard_launchers_have_cleanup_traps(self):
+        if shutil.which("zsh") is None:
+            self.skipTest("zsh is not available")
+
+        root = Path(__file__).resolve().parents[1]
+        launcher = root / "bin" / "method-dashboard"
+        command = root / "bin" / "method-dashboard.command"
+
+        for path in (launcher, command):
+            subprocess.run(["zsh", "-n", str(path)], check=True, capture_output=True, text=True)
+
+        launcher_text = launcher.read_text(encoding="utf-8")
+        self.assertIn("trap cleanup EXIT INT TERM HUP", launcher_text)
+        self.assertIn("stop_process_tree", launcher_text)
+        self.assertIn("stop_known_dashboard_port", launcher_text)
+        self.assertIn("DASHBOARD_PORT_SEARCH_LIMIT", launcher_text)
 
 
 if __name__ == "__main__":

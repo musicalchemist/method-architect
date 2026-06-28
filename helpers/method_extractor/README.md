@@ -62,6 +62,12 @@ You can also run the same two-pass workflow from a local browser dashboard:
 bin/method-dashboard
 ```
 
+You can double-click the repo-local macOS command file too:
+
+```text
+bin/method-dashboard.command
+```
+
 From anywhere on this machine, including your home directory, run the launcher by path:
 
 ```bash
@@ -74,11 +80,21 @@ The dashboard is served at:
 http://127.0.0.1:8765
 ```
 
+If port `8765` is already in use by another local app, the dashboard automatically tries the next available port in a small Method Architect range. The terminal prints the actual URL, for example:
+
+```text
+Method Extractor dashboard: http://127.0.0.1:8766
+```
+
+To force a specific port and fail when it is busy, add `--no-auto-port`.
+
 The launcher opens that URL automatically. If you only want the terminal URL, run:
 
 ```bash
 bin/method-dashboard --no-open-browser
 ```
+
+The launcher traps `EXIT`, `INT`, `TERM`, and `HUP`. Pressing Ctrl-C, closing the Terminal window, or otherwise exiting the launcher stops the dashboard process tree. As a fallback, it only checks the configured dashboard port and only stops a listener whose command looks like this helper's `method_extractor dashboard` process.
 
 The dashboard lets you provide one of:
 

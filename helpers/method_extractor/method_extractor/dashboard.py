@@ -4,6 +4,8 @@ import json
 import mimetypes
 import os
 import re
+import signal
+import socket
 import subprocess
 import sys
 import time
@@ -25,6 +27,7 @@ from .schema import DOMAIN_PROFILES
 HELPER_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
+DEFAULT_PORT_SEARCH_LIMIT = 35
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_BODY_BYTES = MAX_UPLOAD_BYTES + (2 * 1024 * 1024)
 ALLOWED_ARTIFACTS = {
@@ -85,7 +88,14 @@ class DashboardError(RuntimeError):
     pass
 
 
-def run_dashboard(*, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, open_browser: bool = False) -> int:
+def run_dashboard(
+    *,
+    host: str = DEFAULT_HOST,
+    port: int = DEFAULT_PORT,
+    open_browser: bool = False,
+    auto_port: bool = True,
+) -> int:
+    port = _select_dashboard_port(host=host, preferred_port=port, auto_port=auto_port)
     config = DashboardConfig(host=host, port=port)
     config.papers_dir.mkdir(parents=True, exist_ok=True)
     config.runs_dir.mkdir(parents=True, exist_ok=True)
@@ -95,6 +105,8 @@ def run_dashboard(*, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, open_br
     url = f"http://{host}:{port}"
     print(f"Method Extractor dashboard: {url}")
     print("Press Ctrl+C to stop.")
+
+    previous_handlers = _install_signal_handlers(server)
 
     if open_browser:
         try:
@@ -107,8 +119,52 @@ def run_dashboard(*, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, open_br
     except KeyboardInterrupt:
         print("\nStopping dashboard.")
     finally:
+        _restore_signal_handlers(previous_handlers)
         server.server_close()
     return 0
+
+
+def _select_dashboard_port(*, host: str, preferred_port: int, auto_port: bool) -> int:
+    if not auto_port:
+        return preferred_port
+
+    for port in range(preferred_port, preferred_port + DEFAULT_PORT_SEARCH_LIMIT):
+        if _port_is_available(host, port):
+            if port != preferred_port:
+                print(f"Port {preferred_port} is busy; using {port} instead.")
+            return port
+
+    end_port = preferred_port + DEFAULT_PORT_SEARCH_LIMIT - 1
+    raise DashboardError(f"No available dashboard port found from {preferred_port} to {end_port}.")
+
+
+def _port_is_available(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            probe.bind((host, port))
+        except OSError:
+            return False
+    return True
+
+
+def _install_signal_handlers(server: ThreadingHTTPServer) -> dict[int, Any]:
+    previous_handlers: dict[int, Any] = {}
+
+    def handle_signal(signum: int, _frame: Any) -> None:
+        server.server_close()
+        raise KeyboardInterrupt
+
+    for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        previous_handlers[signum] = signal.getsignal(signum)
+        signal.signal(signum, handle_signal)
+
+    return previous_handlers
+
+
+def _restore_signal_handlers(previous_handlers: dict[int, Any]) -> None:
+    for signum, handler in previous_handlers.items():
+        signal.signal(signum, handler)
 
 
 def run_extraction_from_form(parsed: ParsedForm, config: DashboardConfig) -> dict[str, Any]:

@@ -96,6 +96,11 @@ def build_parser() -> argparse.ArgumentParser:
     dashboard.add_argument("--host", default="127.0.0.1", help="Host interface for the local dashboard.")
     dashboard.add_argument("--port", type=int, default=8765, help="Port for the local dashboard.")
     dashboard.add_argument(
+        "--no-auto-port",
+        action="store_true",
+        help="Fail instead of trying the next available dashboard port when the requested port is busy.",
+    )
+    dashboard.add_argument(
         "--open-browser",
         dest="open_browser",
         action="store_true",
@@ -367,7 +372,12 @@ def cmd_schema(args: argparse.Namespace) -> int:
 def cmd_dashboard(args: argparse.Namespace) -> int:
     from .dashboard import run_dashboard
 
-    return run_dashboard(host=args.host, port=args.port, open_browser=args.open_browser)
+    return run_dashboard(
+        host=args.host,
+        port=args.port,
+        open_browser=args.open_browser,
+        auto_port=not args.no_auto_port,
+    )
 
 
 def _new_run_dir(base: Path, slug: str) -> Path:

@@ -3,6 +3,96 @@ set -euo pipefail
 
 SCRIPT_DIR="${0:A:h}"
 HELPER_DIR="${SCRIPT_DIR:h}"
+DASHBOARD_PORT="8765"
+DASHBOARD_PORT_SEARCH_LIMIT=35
+CHILD_PID=""
+
+for arg in "$@"; do
+  case "${arg}" in
+    --port=*)
+      DASHBOARD_PORT="${arg#--port=}"
+      ;;
+  esac
+done
+
+for ((i = 1; i <= $#; i++)); do
+  if [[ "${argv[i]}" == "--port" && $((i + 1)) -le $# ]]; then
+    DASHBOARD_PORT="${argv[i + 1]}"
+  fi
+done
+
+is_running() {
+  local pid="$1"
+  [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null
+}
+
+stop_process_tree() {
+  local pid="$1"
+  local child
+
+  if ! is_running "${pid}"; then
+    return 0
+  fi
+
+  for child in $(pgrep -P "${pid}" 2>/dev/null || true); do
+    stop_process_tree "${child}"
+  done
+
+  kill -TERM "${pid}" 2>/dev/null || true
+}
+
+force_stop_process_tree() {
+  local pid="$1"
+  local child
+
+  if ! is_running "${pid}"; then
+    return 0
+  fi
+
+  for child in $(pgrep -P "${pid}" 2>/dev/null || true); do
+    force_stop_process_tree "${child}"
+  done
+
+  kill -KILL "${pid}" 2>/dev/null || true
+}
+
+stop_known_dashboard_port() {
+  local pid
+  local command
+  local port
+
+  if [[ -z "${DASHBOARD_PORT}" || "${DASHBOARD_PORT}" != <-> ]]; then
+    return 0
+  fi
+
+  for ((port = DASHBOARD_PORT; port < DASHBOARD_PORT + DASHBOARD_PORT_SEARCH_LIMIT; port++)); do
+    for pid in $(lsof -tiTCP:"${port}" -sTCP:LISTEN 2>/dev/null || true); do
+      command="$(ps -p "${pid}" -o command= 2>/dev/null || true)"
+      if [[ "${command}" == *"method_extractor"* && "${command}" == *"dashboard"* ]]; then
+        stop_process_tree "${pid}"
+        sleep 1
+        force_stop_process_tree "${pid}"
+      fi
+    done
+  done
+}
+
+cleanup() {
+  local exit_code=$?
+
+  trap - EXIT INT TERM HUP
+
+  if is_running "${CHILD_PID}"; then
+    stop_process_tree "${CHILD_PID}"
+    sleep 1
+    force_stop_process_tree "${CHILD_PID}"
+  fi
+
+  stop_known_dashboard_port
+  exit "${exit_code}"
+}
+
+trap cleanup EXIT INT TERM HUP
 
 if ! command -v uv >/dev/null 2>&1; then
   print -u2 "uv is required to run the Method Extractor dashboard."
@@ -11,4 +101,6 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 cd "${HELPER_DIR}"
-exec uv run python -m method_extractor dashboard "$@"
+uv run python -m method_extractor dashboard "$@" &
+CHILD_PID=$!
+wait "${CHILD_PID}"

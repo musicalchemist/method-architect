@@ -1,6 +1,9 @@
+import contextlib
+import io
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from method_extractor.dashboard import (
     DashboardConfig,
@@ -9,6 +12,7 @@ from method_extractor.dashboard import (
     _extract_run_dir,
     _prepare_input_ref,
     _render_dashboard_page,
+    _select_dashboard_port,
     parse_form_data,
 )
 
@@ -101,6 +105,25 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("align-items: start;", html)
         self.assertIn("align-items: flex-start;", html)
         self.assertIn("display: inline-flex;", html)
+
+    def test_select_dashboard_port_skips_busy_port(self):
+        with patch(
+            "method_extractor.dashboard._port_is_available",
+            side_effect=[False, True],
+        ):
+            with contextlib.redirect_stdout(io.StringIO()):
+                selected = _select_dashboard_port(host="127.0.0.1", preferred_port=8765, auto_port=True)
+
+        self.assertEqual(selected, 8766)
+
+    def test_select_dashboard_port_can_disable_auto_port(self):
+        with patch(
+            "method_extractor.dashboard._port_is_available",
+            side_effect=AssertionError("port probe should not run when auto_port is disabled"),
+        ):
+            selected = _select_dashboard_port(host="127.0.0.1", preferred_port=8765, auto_port=False)
+
+        self.assertEqual(selected, 8765)
 
 
 if __name__ == "__main__":
